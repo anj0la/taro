@@ -51,6 +51,9 @@ isSymbol c = (c >= '!' && c <= '/') || (c >= ':' && c <= '@') || (c >= '[' && c 
 isSpace :: Char -> Bool 
 isSpace c = c == ' '
 
+isPrintable :: Char -> Bool 
+isPrintable c = isAlpha c || isDigit c || isSymbol c || isSpace c
+
 peek :: String -> Maybe Char 
 peek [] = Nothing 
 peek (x : _) = Just x
@@ -97,6 +100,7 @@ bump lexer =
     let oldPos = lexPos lexer 
     in lexer 
         { source = tail (source lexer)
+        , curr = curr lexer + 1
         , lexPos = updatePos oldPos (line oldPos) (col oldPos + 1) 
         }
 
@@ -159,7 +163,53 @@ readLineComment lexer =
             in readLineComment lexer'
         Nothing     -> lexer -- reached the end of the lexer
 
--- resolveChar :: Char -> Lexer -> Either ()
+resolveChar :: Char -> Lexer -> Either (String, Lexer) Lexer -- Left = (String, Lexer), Right = Lexer
+resolveChar char lexer =
+    case char of 
+        '\\' -> 
+            case peek (source lexer) of 
+                Nothing _ -> ("unterminated escape sequence in character literal", lexer)
+                Just _ ->
+                    let (char', lexer') = advance lexer
+                    in case char' of 
+                        'n'     -> Right lexer'
+                        't'     -> Right lexer'
+                        'r'     -> Right lexer'
+                        '\\'    -> Right lexer'
+                        '\''    -> Right lexer' 
+                        '"'     -> Right lexer'
+                        _       -> Left ("invalid escape sequence", lexer')
+        c | not (isPrintable c) -> Left ("invalid character in literal: " ++ [c], lexer)
+        _ -> Right lexer
+
+skipUntilClosingQuote :: Lexer -> Char -> Lexer 
+skipUntilClosingQuote lexer quote = 
+    case peek (source lexer) of 
+        Nothing -> lexer
+        Just char | char == quote -> 
+            bump lexer
+        Just _ -> 
+            skipUntilClosingQuote (bump lexer) quote 
+
+closeChar :: Lexer -> Either (String, Lexer) Lexer 
+closeChar lexer = 
+    case peek (source lexer) of 
+        Nothing -> Left ("unterminated character literal", lexer)
+        Just '\'' -> Right (bump lexer)
+        Just _ ->
+            let lexer' = skipUntilClosingQuote lexer '\'' 
+            in Left ("character literal must contain only one character", lexer')
+
+readChar :: Lexer -> Either (String, Lexer) Lexer 
+readChar lexer = 
+    case peek (source lexer) of 
+        Nothing     -> Left ("unterminated character literal", lexer)
+        Just '\''   -> Left ("empty character literal", bump lexer)
+        Just _      -> do 
+            let (char, lexer') = advance lexer
+            lexer'' <- resolveChar char lexer'
+            lexer''' <- closeChar lexer''
+            return (addToken CharLiteral lexer''')
 
 buildIdentifier :: String -> Lexer -> (String, Lexer) -- need to actually build the identifier, so return a (String, Lexer)
 buildIdentifier lexeme lexer =
