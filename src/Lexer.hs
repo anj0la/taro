@@ -200,7 +200,7 @@ closeChar lexer =
             let lexer' = skipUntilClosingQuote lexer '\'' 
             in Left ("character literal must contain only one character", lexer')
 
-readChar :: Lexer -> Either (String, Lexer) Lexer 
+readChar :: Lexer -> Either (String, Lexer) Lexer -- forgot about payload, will need to modify slightly
 readChar lexer = 
     case peek (source lexer) of 
         Nothing     -> Left ("unterminated character literal", lexer)
@@ -211,7 +211,7 @@ readChar lexer =
             lexer''' <- closeChar lexer''
             return (addToken CharLiteral lexer''')
 
-readString :: Lexer -> Either (String, Lexer) Lexer 
+readString :: Lexer -> Either (String, Lexer) Lexer -- forgot about payload, will need to modify slightly
 readString lexer =
     case peek (source lexer) of 
         Nothing -> Left ("unterminated string literal", lexer)
