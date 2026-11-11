@@ -211,6 +211,26 @@ readChar lexer =
             lexer''' <- closeChar lexer''
             return (addToken CharLiteral lexer''')
 
+readString :: Lexer -> Either (String, Lexer) Lexer 
+readString lexer =
+    case peek (source lexer) of 
+        Nothing -> Left ("unterminated string literal", lexer)
+        Just '"' -> Right (addToken StringLiteral (bump lexer))
+        Just _ -> 
+            let (c, lexer') = advance lexer -- safe to advance, we KNOW there's at least one token
+            in if c == '\\' then
+                case peek (source lexer') of 
+                    Nothing     -> Left ("unterminated string literal", lexer')
+                    Just 'n'    -> readString (bump lexer')
+                    Just 't'    -> readString (bump lexer')
+                    Just 'r'    -> readString (bump lexer')
+                    Just '/'    -> readString (bump lexer')
+                    Just '\''   -> readString (bump lexer')
+                    Just '"'    -> readString (bump lexer')
+                    Just _      -> Left ("invalid escape sequence", skipUntilClosingQuote lexer' '"')
+            else 
+                readString lexer'
+
 buildIdentifier :: String -> Lexer -> (String, Lexer) -- need to actually build the identifier, so return a (String, Lexer)
 buildIdentifier lexeme lexer =
     case peek (source lexer) of 
